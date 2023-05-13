@@ -14,6 +14,12 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static('public'));
 
+type Content = {
+  filename: string
+  content?: string
+  type: string
+}
+
 app.get('/api/list', async (req, res) => {
   // glob('/public/**/*', { ignore: 'node_modules/**' });
   const helmChartFiles = await glob('**/*', {
@@ -23,6 +29,32 @@ app.get('/api/list', async (req, res) => {
     dot: true,
   })
   res.json(helmChartFiles);
+});
+
+app.get('/api/chart', async (req, res) => {
+  const helmChartFiles = await glob('**/*', {
+    ignore: 'node_modules/**',
+    absolute: false,
+    cwd: 'public',
+    dot: true,
+  })
+
+  const chartContent: Map<string, Content> = new Map<string, Content>();
+
+  helmChartFiles.forEach((file) => {
+    const fileCnt: Content = {
+      filename: file,
+      type: "directory"
+    } as Content;
+    const absolutePath = __dirname + '/../' + 'public/' + file;
+    if (!fs.lstatSync(absolutePath).isDirectory()) {
+      fileCnt.content = fs.readFileSync(absolutePath, 'utf8');
+      fileCnt.type = 'file';
+    }
+    chartContent.set(file, fileCnt);
+  });
+
+  res.json(Object.fromEntries(chartContent));
 });
 
 app.get('/api/file/:path', async (req, res) => {
