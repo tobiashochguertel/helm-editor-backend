@@ -1,1 +1,1 @@
-podman build --format docker --tag th-helm-template-service .
+podman build --format docker --tag th-helm-playground-backend .
