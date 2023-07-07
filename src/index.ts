@@ -21,7 +21,6 @@ type Content = {
 }
 
 app.get('/api/list', async (req, res) => {
-  // glob('/public/**/*', { ignore: 'node_modules/**' });
   const helmChartFiles = await glob('**/*', {
     ignore: 'node_modules/**',
     absolute: false,
@@ -55,22 +54,6 @@ app.get('/api/chart', async (req, res) => {
   });
 
   res.json(Object.fromEntries(chartContent));
-});
-
-app.get('/api/file/:path', async (req, res) => {
-  // res.sendFile('public/' + req.params.path, { root: __dirname + '/../' });
-  const absolutePath = __dirname + '/../' + 'public/' + req.params.path;
-  if (!fs.lstatSync(absolutePath).isDirectory()) {
-    res.json({
-      fielname: req.params.path,
-      content: fs.readFileSync(absolutePath, 'utf8')
-    });
-  } else {
-    res.json({
-      fielname: req.params.path,
-      content: ""
-    });
-  }
 });
 
 type DirTree = {
@@ -137,6 +120,21 @@ app.get('/api/tree', async (req, res) => {
     res.json(result.files);
   } else {
     res.json(result);
+  }
+});
+
+app.get('/api/file/:path', async (req, res) => {
+  const absolutePath = __dirname + '/../' + 'public/' + req.params.path;
+  if (!fs.lstatSync(absolutePath).isDirectory()) {
+    res.json({
+      filename: req.params.path,
+      content: fs.readFileSync(absolutePath, 'utf8')
+    });
+  } else {
+    res.json({
+      filename: req.params.path,
+      content: ""
+    });
   }
 });
 
