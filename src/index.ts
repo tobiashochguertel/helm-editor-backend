@@ -8,6 +8,8 @@ import util from 'util';
 
 dotenv.config();
 
+const ignore_files = ['node_modules/**', '.git/**', '.trunk/**', '.vscode/**', '.idea/**']
+
 const app: Express = express()
 app.use(bodyParser.text());
 app.use(bodyParser.json());
@@ -22,7 +24,7 @@ type Content = {
 
 app.get('/api/list', async (req, res) => {
   const helmChartFiles = await glob('**/*', {
-    ignore: 'node_modules/**',
+    ignore: ignore_files,
     absolute: false,
     cwd: 'public',
     dot: true,
@@ -32,7 +34,7 @@ app.get('/api/list', async (req, res) => {
 
 app.get('/api/chart', async (req, res) => {
   const helmChartFiles = await glob('**/*', {
-    ignore: 'node_modules/**',
+    ignore: ignore_files,
     absolute: false,
     cwd: 'public',
     dot: true,
@@ -98,13 +100,16 @@ app.get('/api/tree', async (req, res) => {
         name: path.basename(filename),
         type: ''
       };
-
+    const lastElementOfFilename = filename.substring(filename.lastIndexOf('/') + 1)
     if (stats.isDirectory()) {
       info.type = "directory";
-      info.files = fs.readdirSync(filename).map(function (child) {
-        return dirTree(filename + '/' + child);
-      });
-    } else {
+      if (lastElementOfFilename !== '.git' && lastElementOfFilename !== ".trunk") {
+        info.files = fs.readdirSync(filename).map(function (child) {
+          return dirTree(filename + '/' + child);
+        });
+      }
+    }
+    if (stats.isFile()) {
       // Assuming it's a file. In real life it could be a symlink or
       // something else!
       info.type = "file";
@@ -115,6 +120,10 @@ app.get('/api/tree', async (req, res) => {
 
   const absolutePath = __dirname + '/../' + 'public';
   const result = dirTree(absolutePath);
+
+  if (result.files != undefined)
+    result.files = result.files.filter((file) => file.name !== '.git' && file.name !== '.trunk');
+
   util.inspect(result, false, null)
   if (result.hasOwnProperty('files')) {
     res.json(result.files);

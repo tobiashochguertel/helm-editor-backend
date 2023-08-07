@@ -1,9 +1,13 @@
 #!/bin/bash
+ENV NODE_ENV=production
 
-# podman build --format docker --tag th-helm-playground-backend .
+yarn run build
+
+PACKAGE_VERSION=$(cat package.json | jq -r '.version')
 
 docker buildx build --push \
   --platform linux/arm64/v8,linux/amd64 \
-  --tag docker.io/tobiashochguertel/th-helm-playground-backend:1.0.0 \
-  --tag docker.io/tobiashochguertel/th-helm-playground-backend:latest \
+  --tag docker.io/tobiashochguertel/th-helm-playground-backend:"$PACKAGE_VERSION" \
   .
+
+  # --tag docker.io/tobiashochguertel/th-helm-playground-backend:latest \
