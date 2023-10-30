@@ -7,14 +7,16 @@ import path from 'path';
 import util from 'util';
 
 dotenv.config();
+const port = process.env.PORT || 5342;
+const hostname = process.env.HOSTNAME || "localhost";
 
 const ignore_files = ['node_modules/**', '.git/**', '.trunk/**', '.vscode/**', '.idea/**']
 
 const app: Express = express()
-app.use(bodyParser.text());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(express.static('public'));
+app.use(bodyParser.text({ limit: '200mb' }));
+app.use(bodyParser.json({ limit: '200mb' }));
+app.use(bodyParser.urlencoded({ extended: false, limit: '200mb' }));
+app.use('/api/charts', express.static('public/charts'))
 
 type Content = {
   filename: string
@@ -22,35 +24,41 @@ type Content = {
   type: string
 }
 
-app.get('/api/list', async (req, res) => {
+async function readHelmChartFiles() {
   const helmChartFiles = await glob('**/*', {
     ignore: ignore_files,
     absolute: false,
     cwd: 'public',
     dot: true,
-  })
-  res.json(helmChartFiles);
-});
+  });
+  return helmChartFiles;
+}
 
+/* app.get('/api/list', async (req, res) => {
+  res.json(readHelmChartFiles());
+}); */
+
+// Exchange the content of the template files
 app.get('/api/chart', async (req, res) => {
-  const helmChartFiles = await glob('**/*', {
-    ignore: ignore_files,
-    absolute: false,
-    cwd: 'public',
-    dot: true,
-  })
-
   const chartContent: Map<string, Content> = new Map<string, Content>();
 
-  helmChartFiles.forEach((file) => {
+  (await readHelmChartFiles()).forEach(async (file) => {
     const fileCnt: Content = {
       filename: file,
       type: "directory"
     } as Content;
     const absolutePath = __dirname + '/../' + 'public/' + file;
     if (!fs.lstatSync(absolutePath).isDirectory()) {
-      fileCnt.content = fs.readFileSync(absolutePath, 'utf8');
-      fileCnt.type = 'file';
+      if (file.startsWith("charts/")) {
+        fileCnt.content = `http://${hostname}:${port}/api/${file}`
+        fileCnt.type = 'charts';
+      }
+      if (!file.startsWith("charts/")) {
+        fileCnt.content = fs.readFileSync(absolutePath, 'utf8');
+        fileCnt.type = 'file';
+      }
+      /*       fileCnt.content = fs.readFileSync(absolutePath, 'utf8');
+            fileCnt.type = 'file'; */
     }
     chartContent.set(file, fileCnt);
   });
@@ -92,32 +100,33 @@ const filesTree = [
   }],
 }]
 */
-app.get('/api/tree', async (req, res) => {
-  function dirTree(filename: string): DirTree {
-    const stats = fs.lstatSync(filename),
-      info: DirTree = {
-        // path: filename,
-        name: path.basename(filename),
-        type: ''
-      };
-    const lastElementOfFilename = filename.substring(filename.lastIndexOf('/') + 1)
-    if (stats.isDirectory()) {
-      info.type = "directory";
-      if (lastElementOfFilename !== '.git' && lastElementOfFilename !== ".trunk") {
-        info.files = fs.readdirSync(filename).map(function (child) {
-          return dirTree(filename + '/' + child);
-        });
-      }
+function dirTree(filename: string): DirTree {
+  const stats = fs.lstatSync(filename),
+    info: DirTree = {
+      // path: filename,
+      name: path.basename(filename),
+      type: ''
+    };
+  const lastElementOfFilename = filename.substring(filename.lastIndexOf('/') + 1)
+  if (stats.isDirectory()) {
+    info.type = "directory";
+    if (lastElementOfFilename !== '.git' && lastElementOfFilename !== ".trunk") {
+      info.files = fs.readdirSync(filename).map(function (child) {
+        return dirTree(filename + '/' + child);
+      });
     }
-    if (stats.isFile()) {
-      // Assuming it's a file. In real life it could be a symlink or
-      // something else!
-      info.type = "file";
-    }
-
-    return info;
+  }
+  if (stats.isFile()) {
+    // Assuming it's a file. In real life it could be a symlink or
+    // something else!
+    info.type = "file";
   }
 
+  return info;
+}
+
+// Exchange the Directory and File Structure (Explorer on the left side)
+app.get('/api/tree', async (req, res) => {
   const absolutePath = __dirname + '/../' + 'public';
   const result = dirTree(absolutePath);
 
@@ -132,6 +141,7 @@ app.get('/api/tree', async (req, res) => {
   }
 });
 
+// Get a single file with content
 app.get('/api/file/:path', async (req, res) => {
   const absolutePath = __dirname + '/../' + 'public/' + req.params.path;
   if (!fs.lstatSync(absolutePath).isDirectory()) {
@@ -147,16 +157,15 @@ app.get('/api/file/:path', async (req, res) => {
   }
 });
 
+// Write a single file with content
 app.put('/api/file/:path', async (req, res) => {
   let data = req.body;
-  // console.log(data)
 
   if (data instanceof Object) {
     data = ""
   }
 
   const absolutePath = __dirname + '/../' + 'public/' + req.params.path;
-  // console.log("absolutePath", absolutePath)
 
   try {
     fs.writeFileSync(absolutePath, data);
@@ -168,7 +177,6 @@ app.put('/api/file/:path', async (req, res) => {
   }
 });
 
-const port = process.env.PORT || 5342;
 app.listen(port, () => {
   console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
 });
